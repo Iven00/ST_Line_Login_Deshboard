@@ -1,4 +1,5 @@
 const DASHBOARD_TIME_ZONE = 'Asia/Taipei';
+const UNKNOWN_DISPLAY_NAME = '未命名帳號';
 
 const dateFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: DASHBOARD_TIME_ZONE,
@@ -76,6 +77,13 @@ function toSeries(map, labelForKey = (key) => key) {
     });
 }
 
+function createHourlyBuckets() {
+  return Array.from({ length: 24 }, (_, hour) => {
+    const key = `${String(hour).padStart(2, '0')}:00`;
+    return [key, new Set()];
+  });
+}
+
 export function normalizeRows(rows) {
   if (!Array.isArray(rows)) {
     return [];
@@ -85,6 +93,7 @@ export function normalizeRows(rows) {
     .map((row) => {
       const timestamp = parseTimestamp(row?.timestamp);
       const lineUserId = String(row?.lineUserId ?? '').trim();
+      const displayName = String(row?.displayName ?? '').trim() || UNKNOWN_DISPLAY_NAME;
 
       if (!timestamp || !lineUserId) {
         return null;
@@ -94,12 +103,41 @@ export function normalizeRows(rows) {
         timestamp,
         timestampText: timestamp.toISOString(),
         lineUserId,
+        displayName,
         dateKey: toDateKey(timestamp),
         hourKey: toHourKey(timestamp)
       };
     })
     .filter(Boolean)
     .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export function getDisplayNameOptions(rows) {
+  const names = new Map();
+
+  for (const row of rows) {
+    if (!names.has(row.displayName)) {
+      names.set(row.displayName, new Set());
+    }
+
+    names.get(row.displayName).add(row.lineUserId);
+  }
+
+  return [...names.entries()]
+    .map(([name, lineUserIds]) => ({ name, count: lineUserIds.size }))
+    .sort((a, b) => {
+      if (a.name === UNKNOWN_DISPLAY_NAME) return 1;
+      if (b.name === UNKNOWN_DISPLAY_NAME) return -1;
+      return a.name.localeCompare(b.name, 'zh-Hant-TW');
+    });
+}
+
+export function filterRowsByExcludedDisplayNames(rows, excludedDisplayNames) {
+  if (!excludedDisplayNames || excludedDisplayNames.size === 0) {
+    return rows;
+  }
+
+  return rows.filter((row) => !excludedDisplayNames.has(row.displayName));
 }
 
 export function groupDaily(rows) {
@@ -117,7 +155,7 @@ export function groupDaily(rows) {
 }
 
 export function groupHourlyForDate(rows, dateKey) {
-  const buckets = new Map();
+  const buckets = new Map(createHourlyBuckets());
 
   for (const row of rows) {
     if (row.dateKey !== dateKey) {

@@ -12,6 +12,7 @@
 
 - 時間欄位：`timestamp`
 - 不重複欄位：`lineUserId`
+- 濾除帳號欄位：`displayName`
 - 時區：`Asia/Taipei`
 
 ## Google Apps Script 設定
@@ -46,6 +47,12 @@ window.DASHBOARD_CONFIG = {
 ```
 
 未設定 URL 時，頁面會使用展示資料，方便先檢查版面。
+
+## 濾除帳號
+
+Dashboard 會從 Apps Script 回傳的 `displayName` 建立「濾除帳號」清單。勾選的帳號會從摘要卡片、每日圖表、每小時圖表中排除。設定會存在目前瀏覽器的 `localStorage`，下次開啟同一個 dashboard 會自動套用。
+
+更新 `apps-script/Code.gs` 後，請到 Apps Script 重新部署 Web App；若只改本機前端但沒有重新部署 Apps Script，API 不會回傳 `displayName`，畫面會把資料歸類為「未命名帳號」。
 
 ## GitHub Pages 部署
 

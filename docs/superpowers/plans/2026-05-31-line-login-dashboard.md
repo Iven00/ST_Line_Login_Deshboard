@@ -13,7 +13,7 @@
 ### Task 1: Data Aggregation Core
 
 **Files:**
-- Create: `assets/js/core.mjs`
+- Create: `assets/js/core.js`
 - Test: `tests/core.test.mjs`
 
 - [x] **Step 1: Write failing tests**

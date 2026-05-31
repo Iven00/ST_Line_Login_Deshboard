@@ -2,6 +2,7 @@ const DEFAULT_TIME_ZONE = 'Asia/Taipei';
 const REQUIRED_COLUMNS = {
   timestamp: 'timestamp',
   lineUserId: 'lineUserId',
+  displayName: 'displayName',
 };
 
 function doGet(event) {
@@ -59,6 +60,7 @@ function readRows_() {
     .map((row) => {
       const timestamp = row[columnIndexes.timestamp];
       const lineUserId = String(row[columnIndexes.lineUserId] || '').trim();
+      const displayName = columnIndexes.displayName === -1 ? '' : String(row[columnIndexes.displayName] || '').trim();
 
       if (!timestamp || !lineUserId) {
         return null;
@@ -67,6 +69,7 @@ function readRows_() {
       return {
         timestamp: formatTimestamp_(timestamp),
         lineUserId,
+        displayName,
       };
     })
     .filter(Boolean);
@@ -76,12 +79,13 @@ function findColumnIndexes_(headers) {
   const lowerHeaders = headers.map((header) => header.toLowerCase());
   const timestamp = lowerHeaders.indexOf(REQUIRED_COLUMNS.timestamp.toLowerCase());
   const lineUserId = lowerHeaders.indexOf(REQUIRED_COLUMNS.lineUserId.toLowerCase());
+  const displayName = lowerHeaders.indexOf(REQUIRED_COLUMNS.displayName.toLowerCase());
 
   if (timestamp === -1 || lineUserId === -1) {
     throw new Error('Required columns timestamp and lineUserId were not found.');
   }
 
-  return { timestamp, lineUserId };
+  return { timestamp, lineUserId, displayName };
 }
 
 function formatTimestamp_(value) {

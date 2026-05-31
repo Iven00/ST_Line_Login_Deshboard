@@ -26,6 +26,26 @@
         <div class="status-pill" data-status>準備讀取資料</div>
       </header>
 
+      <section class="filter-card" aria-label="濾除帳號">
+        <div class="filter-head">
+          <div>
+            <h2>濾除帳號</h2>
+            <p>勾選 displayName 後，摘要與圖表會排除該帳號資料；設定會儲存在這台瀏覽器。</p>
+          </div>
+          <div class="filter-actions">
+            <span data-filter-summary>未套用濾除</span>
+            <button type="button" data-select-all-filters>全選濾除</button>
+            <button type="button" data-clear-filters>清除濾除</button>
+          </div>
+        </div>
+        <div class="filter-list-wrap">
+          <div class="filter-list" data-filter-list></div>
+          <button class="filter-resize-handle" type="button" data-filter-resize-handle aria-label="調整濾除清單高度">
+            <span></span>
+          </button>
+        </div>
+      </section>
+
       <section class="summary-grid" aria-label="統計摘要">
         <article class="metric-card">
           <div class="metric-icon" aria-hidden="true">
@@ -106,7 +126,7 @@
       </section>
     </main>
 
-    <script src="assets/js/config.js"></script>
-    <script type="module" src="assets/js/app.js"></script>
+    <script src="assets/js/config.js?v=7"></script>
+    <script type="module" src="assets/js/app.js?v=7"></script>
   </body>
 </html>

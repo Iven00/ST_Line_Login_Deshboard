@@ -1,26 +1,32 @@
 import {
   buildSummary,
+  filterRowsByExcludedDisplayNames,
+  getDisplayNameOptions,
   groupDaily,
   groupHourlyForDate,
   normalizeRows
-} from './core.mjs';
+} from './core.js?v=7';
+
+const FILTER_STORAGE_KEY = 'stLineLoginDashboard.excludedDisplayNames.v1';
 
 const sampleRows = [
-  { timestamp: '2026-05-27T07:40:00+08:00', lineUserId: 'U001' },
-  { timestamp: '2026-05-27T08:12:00+08:00', lineUserId: 'U002' },
-  { timestamp: '2026-05-28T09:10:00+08:00', lineUserId: 'U002' },
-  { timestamp: '2026-05-28T09:20:00+08:00', lineUserId: 'U003' },
-  { timestamp: '2026-05-29T13:10:00+08:00', lineUserId: 'U004' },
-  { timestamp: '2026-05-30T08:20:00+08:00', lineUserId: 'U005' },
-  { timestamp: '2026-05-30T08:40:00+08:00', lineUserId: 'U006' },
-  { timestamp: '2026-05-30T10:00:00+08:00', lineUserId: 'U005' },
-  { timestamp: '2026-05-31T15:18:00+08:00', lineUserId: 'U007' }
+  { timestamp: '2026-05-27T07:40:00+08:00', lineUserId: 'U001', displayName: '測試帳號 A' },
+  { timestamp: '2026-05-27T08:12:00+08:00', lineUserId: 'U002', displayName: '測試帳號 B' },
+  { timestamp: '2026-05-28T09:10:00+08:00', lineUserId: 'U002', displayName: '測試帳號 B' },
+  { timestamp: '2026-05-28T09:20:00+08:00', lineUserId: 'U003', displayName: '測試帳號 C' },
+  { timestamp: '2026-05-29T13:10:00+08:00', lineUserId: 'U004', displayName: '測試帳號 D' },
+  { timestamp: '2026-05-30T08:20:00+08:00', lineUserId: 'U005', displayName: '測試帳號 E' },
+  { timestamp: '2026-05-30T08:40:00+08:00', lineUserId: 'U006', displayName: '測試帳號 F' },
+  { timestamp: '2026-05-30T10:00:00+08:00', lineUserId: 'U005', displayName: '測試帳號 E' },
+  { timestamp: '2026-05-31T15:18:00+08:00', lineUserId: 'U007', displayName: '' }
 ];
 
 const state = {
+  allRows: [],
   rows: [],
   daily: [],
-  selectedDate: ''
+  selectedDate: '',
+  excludedDisplayNames: new Set()
 };
 
 const elements = {
@@ -32,7 +38,12 @@ const elements = {
   totalRows: document.querySelector('[data-total-rows]'),
   uniqueUsers: document.querySelector('[data-unique-users]'),
   activeDays: document.querySelector('[data-active-days]'),
-  latestDate: document.querySelector('[data-latest-date]')
+  latestDate: document.querySelector('[data-latest-date]'),
+  filterList: document.querySelector('[data-filter-list]'),
+  filterResizeHandle: document.querySelector('[data-filter-resize-handle]'),
+  filterSummary: document.querySelector('[data-filter-summary]'),
+  selectAllFilters: document.querySelector('[data-select-all-filters]'),
+  clearFilters: document.querySelector('[data-clear-filters]')
 };
 
 function setStatus(message, tone = 'neutral') {
@@ -42,6 +53,27 @@ function setStatus(message, tone = 'neutral') {
 
 function numberText(value) {
   return new Intl.NumberFormat('zh-Hant-TW').format(value);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function loadSavedFilters() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(saved) ? saved.filter((name) => typeof name === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFilters() {
+  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...state.excludedDisplayNames]));
 }
 
 function buildApiUrl() {
@@ -87,6 +119,82 @@ function renderSummary(summary) {
   }).format(new Date());
 }
 
+function renderFilters() {
+  const options = getDisplayNameOptions(state.allRows);
+
+  if (!options.length) {
+    elements.filterList.innerHTML = '<div class="empty-filter">沒有可過濾的帳號</div>';
+    elements.filterSummary.textContent = '未套用濾除';
+    return;
+  }
+
+  const validNames = new Set(options.map((option) => option.name));
+  state.excludedDisplayNames = new Set([...state.excludedDisplayNames].filter((name) => validNames.has(name)));
+  saveFilters();
+
+  elements.filterSummary.textContent = state.excludedDisplayNames.size
+    ? `已濾除 ${state.excludedDisplayNames.size} 個帳號`
+    : '未套用濾除';
+
+  elements.filterList.innerHTML = options
+    .map((option) => {
+      const checked = state.excludedDisplayNames.has(option.name) ? 'checked' : '';
+      const selectedClass = checked ? ' is-selected' : '';
+      return `
+        <label class="filter-chip${selectedClass}">
+          <input type="checkbox" value="${escapeHtml(option.name)}" ${checked}>
+          <span>${escapeHtml(option.name)}</span>
+          <small>${option.count}</small>
+        </label>
+      `;
+    })
+    .join('');
+
+  elements.filterList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        state.excludedDisplayNames.add(checkbox.value);
+      } else {
+        state.excludedDisplayNames.delete(checkbox.value);
+      }
+
+      saveFilters();
+      applyFiltersAndRender();
+    });
+  });
+}
+
+function setupFilterResize() {
+  let startY = 0;
+  let startHeight = 0;
+
+  const stopResize = () => {
+    document.removeEventListener('pointermove', resize);
+    document.removeEventListener('pointerup', stopResize);
+    document.body.classList.remove('is-resizing-filter');
+  };
+
+  const resize = (event) => {
+    const nextHeight = Math.min(420, Math.max(96, startHeight + event.clientY - startY));
+    elements.filterList.style.maxHeight = `${nextHeight}px`;
+    localStorage.setItem('stLineLoginDashboard.filterListHeight.v1', String(nextHeight));
+  };
+
+  const savedHeight = Number(localStorage.getItem('stLineLoginDashboard.filterListHeight.v1'));
+  if (Number.isFinite(savedHeight) && savedHeight >= 96) {
+    elements.filterList.style.maxHeight = `${Math.min(420, savedHeight)}px`;
+  }
+
+  elements.filterResizeHandle.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    startY = event.clientY;
+    startHeight = elements.filterList.getBoundingClientRect().height;
+    document.body.classList.add('is-resizing-filter');
+    document.addEventListener('pointermove', resize);
+    document.addEventListener('pointerup', stopResize);
+  });
+}
+
 function pointFor(index, value, length, maxValue, chart) {
   const x = chart.left + (length <= 1 ? chart.width / 2 : (chart.width * index) / (length - 1));
   const y = chart.top + chart.height - (value / maxValue) * chart.height;
@@ -103,7 +211,7 @@ function renderComboChart(container, data, options = {}) {
 
   const width = 920;
   const height = 330;
-  const chart = { left: 58, top: 28, width: 800, height: 230 };
+  const chart = { left: 58, top: 48, width: 800, height: 210 };
   const maxValue = Math.max(1, ...data.map((item) => Math.max(item.count, item.cumulative)));
   const barSlot = chart.width / data.length;
   const barWidth = Math.min(42, barSlot * 0.46);
@@ -127,10 +235,16 @@ function renderComboChart(container, data, options = {}) {
       const barHeight = (item.count / maxValue) * chart.height;
       const y = chart.top + chart.height - barHeight;
       const isSelected = item.key === options.selectedKey;
+      const labelY = barHeight < 20 ? y - 7 : y + Math.max(14, barHeight / 2 + 4);
+      const labelClass = barHeight < 20 ? 'bar-value is-outside' : 'bar-value';
+      const valueLabel = item.count > 0
+        ? `<text x="${x + barWidth / 2}" y="${labelY}" class="${labelClass}">${item.count}</text>`
+        : '';
 
       return `
         <g class="bar-group ${isSelected ? 'is-selected' : ''}" data-key="${item.key}" tabindex="0" role="button" aria-label="${item.label} ${item.count}">
           <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(3, barHeight)}" rx="8" />
+          ${valueLabel}
           <text x="${x + barWidth / 2}" y="${chart.top + chart.height + 28}" class="axis-label">${item.label}</text>
           <title>${item.label}: ${item.count} / 累計 ${item.cumulative}</title>
         </g>
@@ -141,7 +255,17 @@ function renderComboChart(container, data, options = {}) {
   const points = data
     .map((item, index) => {
       const [x, y] = pointFor(index, item.cumulative, data.length, maxValue, chart);
-      return `<circle cx="${x}" cy="${y}" r="5" class="trend-dot"><title>累計 ${item.cumulative}</title></circle>`;
+      const isLast = index === data.length - 1;
+      const isFirst = index === 0;
+      const labelX = isLast ? x - 10 : isFirst ? x + 10 : x;
+      const labelAnchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
+      const labelY = Math.max(16, y - 18);
+      return `
+        <g class="trend-point">
+          <text x="${labelX}" y="${labelY}" class="trend-value" text-anchor="${labelAnchor}">${item.cumulative}</text>
+          <circle cx="${x}" cy="${y}" r="5" class="trend-dot"><title>累計 ${item.cumulative}</title></circle>
+        </g>
+      `;
     })
     .join('');
 
@@ -170,23 +294,6 @@ function renderComboChart(container, data, options = {}) {
   }
 }
 
-function renderDashboard(rows) {
-  state.rows = normalizeRows(rows);
-  state.daily = groupDaily(state.rows);
-  state.selectedDate = state.daily.at(-1)?.key ?? '';
-
-  renderSummary(buildSummary(state.rows));
-  renderComboChart(elements.dailyChart, state.daily, {
-    title: '每日登入數與累計趨勢',
-    selectedKey: state.selectedDate,
-    onSelect: (dateKey) => {
-      state.selectedDate = dateKey;
-      renderCharts();
-    }
-  });
-  renderCharts();
-}
-
 function renderCharts() {
   const hourly = groupHourlyForDate(state.rows, state.selectedDate);
   elements.selectedDate.textContent = state.selectedDate || '-';
@@ -205,6 +312,26 @@ function renderCharts() {
   });
 }
 
+function applyFiltersAndRender() {
+  state.rows = filterRowsByExcludedDisplayNames(state.allRows, state.excludedDisplayNames);
+  state.daily = groupDaily(state.rows);
+
+  if (!state.daily.some((item) => item.key === state.selectedDate)) {
+    state.selectedDate = state.daily.at(-1)?.key ?? '';
+  }
+
+  renderSummary(buildSummary(state.rows));
+  renderFilters();
+  renderCharts();
+}
+
+function renderDashboard(rows) {
+  state.allRows = normalizeRows(rows);
+  state.excludedDisplayNames = loadSavedFilters();
+  state.selectedDate = '';
+  applyFiltersAndRender();
+}
+
 async function init() {
   try {
     const rows = await loadRows();
@@ -216,6 +343,19 @@ async function init() {
   }
 }
 
+elements.selectAllFilters.addEventListener('click', () => {
+  state.excludedDisplayNames = new Set(getDisplayNameOptions(state.allRows).map((option) => option.name));
+  saveFilters();
+  applyFiltersAndRender();
+});
+
+elements.clearFilters.addEventListener('click', () => {
+  state.excludedDisplayNames = new Set();
+  saveFilters();
+  applyFiltersAndRender();
+});
+
+setupFilterResize();
 init();
 
 const refreshMinutes = Number(window.DASHBOARD_CONFIG?.refreshMinutes ?? 0);

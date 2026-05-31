@@ -3,18 +3,20 @@ import assert from 'node:assert/strict';
 
 import {
   buildSummary,
+  filterRowsByExcludedDisplayNames,
+  getDisplayNameOptions,
   groupDaily,
   groupHourlyForDate,
   normalizeRows
-} from '../assets/js/core.mjs';
+} from '../assets/js/core.js';
 
 const rows = [
-  { timestamp: '2026-05-29T23:30:00+08:00', lineUserId: 'U001' },
-  { timestamp: '2026-05-29T23:45:00+08:00', lineUserId: 'U001' },
-  { timestamp: '2026-05-30T08:05:00+08:00', lineUserId: 'U001' },
-  { timestamp: '2026-05-30T08:15:00+08:00', lineUserId: 'U002' },
-  { timestamp: '2026-05-30T09:00:00+08:00', lineUserId: 'U002' },
-  { timestamp: '2026-05-31T10:00:00+08:00', lineUserId: 'U003' },
+  { timestamp: '2026-05-29T23:30:00+08:00', lineUserId: 'U001', displayName: 'Alpha' },
+  { timestamp: '2026-05-29T23:45:00+08:00', lineUserId: 'U001', displayName: 'Alpha' },
+  { timestamp: '2026-05-30T08:05:00+08:00', lineUserId: 'U001', displayName: 'Alpha' },
+  { timestamp: '2026-05-30T08:15:00+08:00', lineUserId: 'U002', displayName: 'Beta' },
+  { timestamp: '2026-05-30T09:00:00+08:00', lineUserId: 'U002', displayName: 'Beta' },
+  { timestamp: '2026-05-31T10:00:00+08:00', lineUserId: 'U003', displayName: '' },
   { timestamp: '', lineUserId: 'ignored' },
   { timestamp: 'not a date', lineUserId: 'ignored2' },
   { timestamp: '2026-05-31T10:10:00+08:00', lineUserId: '' }
@@ -25,8 +27,29 @@ test('normalizeRows drops invalid rows and preserves valid login records', () =>
 
   assert.equal(normalized.length, 6);
   assert.equal(normalized[0].lineUserId, 'U001');
+  assert.equal(normalized[0].displayName, 'Alpha');
   assert.equal(normalized[0].dateKey, '2026-05-29');
   assert.equal(normalized[0].hourKey, '23:00');
+});
+
+test('getDisplayNameOptions returns sorted names and a fallback for blank displayName', () => {
+  const options = getDisplayNameOptions(normalizeRows(rows));
+
+  assert.deepEqual(options, [
+    { name: 'Alpha', count: 1 },
+    { name: 'Beta', count: 1 },
+    { name: '未命名帳號', count: 1 }
+  ]);
+});
+
+test('filterRowsByExcludedDisplayNames removes every line user with a selected displayName', () => {
+  const normalized = normalizeRows([
+    ...rows,
+    { timestamp: '2026-05-31T11:00:00+08:00', lineUserId: 'U004', displayName: 'Beta' }
+  ]);
+  const filtered = filterRowsByExcludedDisplayNames(normalized, new Set(['Beta', '未命名帳號']));
+
+  assert.deepEqual([...new Set(filtered.map((row) => row.lineUserId))], ['U001']);
 });
 
 test('groupDaily counts distinct line users by date and builds cumulative trend', () => {
@@ -42,9 +65,15 @@ test('groupDaily counts distinct line users by date and builds cumulative trend'
 test('groupHourlyForDate counts distinct line users within the selected day', () => {
   const hourly = groupHourlyForDate(normalizeRows(rows), '2026-05-30');
 
-  assert.deepEqual(hourly, [
+  assert.equal(hourly.length, 24);
+  assert.deepEqual(hourly.slice(8, 10), [
     { key: '08:00', label: '08:00', count: 2, cumulative: 2 },
     { key: '09:00', label: '09:00', count: 1, cumulative: 3 }
+  ]);
+  assert.deepEqual(hourly.slice(10, 13), [
+    { key: '10:00', label: '10:00', count: 0, cumulative: 3 },
+    { key: '11:00', label: '11:00', count: 0, cumulative: 3 },
+    { key: '12:00', label: '12:00', count: 0, cumulative: 3 }
   ]);
 });
 
