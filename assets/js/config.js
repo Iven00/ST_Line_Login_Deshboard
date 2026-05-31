@@ -1,0 +1,5 @@
+window.DASHBOARD_CONFIG = {
+  apiUrl: 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE',
+  token: 'PASTE_YOUR_DASHBOARD_TOKEN_HERE',
+  refreshMinutes: 10
+};

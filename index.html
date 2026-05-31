@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>山風童軍團 Line官方網站 Login 狀態儀錶板</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+              <path d="M9 32c4-8 8-12 12-12s8 4 12 12" stroke="#4285F4" stroke-width="4" stroke-linecap="round"/>
+              <path d="M20 29c3-7 6-11 9-11 2.5 0 5.5 3.2 9 9.5" stroke="#34A853" stroke-width="4" stroke-linecap="round"/>
+              <circle cx="17" cy="14" r="5" fill="#FBBC04"/>
+              <path d="M9 36h30" stroke="#EA4335" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <h1>山風童軍團 Line官方網站 Login 狀態儀錶板</h1>
+            <p>以日期與時間檢視不重複 LINE 使用者登入趨勢</p>
+          </div>
+        </div>
+        <div class="status-pill" data-status>準備讀取資料</div>
+      </header>
+
+      <section class="summary-grid" aria-label="統計摘要">
+        <article class="metric-card">
+          <div class="metric-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M4 19V5M8 19v-8M12 19V7M16 19v-5M20 19V9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="metric-label">有效資料筆數</p>
+            <p class="metric-value" data-total-rows>0</p>
+          </div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM18 8v4M20 10h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="metric-label">不重複 lineUserId</p>
+            <p class="metric-value" data-unique-users>0</p>
+          </div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="metric-label">有登入日期數</p>
+            <p class="metric-value" data-active-days>0</p>
+          </div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="m4 15 5-5 4 4 7-8M15 6h5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p class="metric-label">最新日期</p>
+            <p class="metric-value" data-latest-date>-</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2>每日登入數量</h2>
+              <p>X 軸為日期，長條為單日不重複數量，綠線為累計數量。</p>
+            </div>
+            <div class="chart-meta">更新時間 <span data-updated-at>-</span></div>
+          </div>
+          <div class="chart-wrap" data-daily-chart></div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-swatch"></span>單日數量</span>
+            <span class="legend-item"><span class="legend-swatch line"></span>累計 trend</span>
+          </div>
+        </article>
+
+        <article class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2>選取日期的時間分布</h2>
+              <p>點擊上方日期長條後，這裡會顯示該日每小時不重複登入數。</p>
+            </div>
+            <div class="chart-meta">目前日期 <strong data-selected-date>-</strong></div>
+          </div>
+          <div class="chart-wrap" data-hourly-chart></div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-swatch"></span>小時數量</span>
+            <span class="legend-item"><span class="legend-swatch line"></span>當日累計 trend</span>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="assets/js/config.js"></script>
+    <script type="module" src="assets/js/app.js"></script>
+  </body>
+</html>
