@@ -1,4 +1,6 @@
 const DEFAULT_TIME_ZONE = 'Asia/Taipei';
+const FILTER_SETTINGS_SHEET_NAME = '\u5de5\u4f5c\u88681';
+const FILTER_SETTINGS_KEY = '__dashboard_excluded_display_names__';
 const REQUIRED_COLUMNS = {
   timestamp: 'timestamp',
   lineUserId: 'lineUserId',
@@ -8,12 +10,50 @@ const REQUIRED_COLUMNS = {
 function doGet(event) {
   try {
     validateToken_(event);
+
+    if (event && event.parameter && event.parameter.action === 'saveFilters') {
+      const settings = writeFilterSettings_(parseDisplayNameList_(event.parameter.excludedDisplayNames));
+
+      return json_({
+        status: 'ok',
+        settings,
+        generatedAt: Utilities.formatDate(new Date(), DEFAULT_TIME_ZONE, "yyyy-MM-dd'T'HH:mm:ss'+08:00'"),
+      });
+    }
+
     const rows = readRows_();
+    const settings = readFilterSettings_();
 
     return json_({
       status: 'ok',
       timeZone: DEFAULT_TIME_ZONE,
       rows,
+      settings,
+      generatedAt: Utilities.formatDate(new Date(), DEFAULT_TIME_ZONE, "yyyy-MM-dd'T'HH:mm:ss'+08:00'"),
+    });
+  } catch (error) {
+    return json_({
+      status: 'error',
+      message: error.message || 'Unknown error',
+    }, 400);
+  }
+}
+
+function doPost(event) {
+  try {
+    validateToken_(event);
+    const body = parseBody_(event);
+    const action = String(body.action || '').trim();
+
+    if (action !== 'saveFilters') {
+      throw new Error('Unsupported action.');
+    }
+
+    const settings = writeFilterSettings_(body.excludedDisplayNames);
+
+    return json_({
+      status: 'ok',
+      settings,
       generatedAt: Utilities.formatDate(new Date(), DEFAULT_TIME_ZONE, "yyyy-MM-dd'T'HH:mm:ss'+08:00'"),
     });
   } catch (error) {
@@ -73,6 +113,106 @@ function readRows_() {
       };
     })
     .filter(Boolean);
+}
+
+function readFilterSettings_() {
+  const sheet = getFilterSettingsSheet_();
+  const values = sheet.getDataRange().getValues();
+
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    if (String(values[rowIndex][0]).trim() === FILTER_SETTINGS_KEY) {
+      return {
+        excludedDisplayNames: parseDisplayNameList_(values[rowIndex][1]),
+        updatedAt: String(values[rowIndex][2] || ''),
+      };
+    }
+  }
+
+  return {
+    excludedDisplayNames: [],
+    updatedAt: '',
+  };
+}
+
+function writeFilterSettings_(displayNames) {
+  const sheet = getFilterSettingsSheet_();
+  const names = normalizeDisplayNameList_(displayNames);
+  const values = sheet.getDataRange().getValues();
+  const updatedAt = Utilities.formatDate(new Date(), DEFAULT_TIME_ZONE, "yyyy-MM-dd'T'HH:mm:ss'+08:00'");
+  const rowValues = [FILTER_SETTINGS_KEY, JSON.stringify(names), updatedAt];
+
+  for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+    if (String(values[rowIndex][0]).trim() === FILTER_SETTINGS_KEY) {
+      sheet.getRange(rowIndex + 1, 1, 1, rowValues.length).setValues([rowValues]);
+      return {
+        excludedDisplayNames: names,
+        updatedAt,
+      };
+    }
+  }
+
+  sheet.appendRow(rowValues);
+  return {
+    excludedDisplayNames: names,
+    updatedAt,
+  };
+}
+
+function getFilterSettingsSheet_() {
+  const properties = PropertiesService.getScriptProperties();
+  const spreadsheetId = properties.getProperty('SPREADSHEET_ID') || '1YKUInNATvHY1VNoFngw0NmROjkn1uSC-fX3iyOK0qgk';
+  const sheetName = properties.getProperty('FILTER_SHEET_NAME') || FILTER_SETTINGS_SHEET_NAME;
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  return spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
+}
+
+function parseBody_(event) {
+  if (!event || !event.postData || !event.postData.contents) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(event.postData.contents);
+  } catch (error) {
+    throw new Error('Invalid JSON body.');
+  }
+}
+
+function parseDisplayNameList_(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    return normalizeDisplayNameList_(JSON.parse(String(value)));
+  } catch (error) {
+    return [];
+  }
+}
+
+function normalizeDisplayNameList_(displayNames) {
+  if (!Array.isArray(displayNames)) {
+    return [];
+  }
+
+  const seen = {};
+  const names = [];
+
+  displayNames.forEach((name) => {
+    if (typeof name !== 'string') {
+      return;
+    }
+
+    const trimmed = name.trim();
+    if (!trimmed || seen[trimmed]) {
+      return;
+    }
+
+    seen[trimmed] = true;
+    names.push(trimmed);
+  });
+
+  return names;
 }
 
 function findColumnIndexes_(headers) {

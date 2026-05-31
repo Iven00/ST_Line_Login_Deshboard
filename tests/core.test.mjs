@@ -7,6 +7,7 @@ import {
   getDisplayNameOptions,
   groupDaily,
   groupHourlyForDate,
+  normalizeDisplayNameList,
   normalizeRows
 } from '../assets/js/core.js';
 
@@ -50,6 +51,12 @@ test('filterRowsByExcludedDisplayNames removes every line user with a selected d
   const filtered = filterRowsByExcludedDisplayNames(normalized, new Set(['Beta', '未命名帳號']));
 
   assert.deepEqual([...new Set(filtered.map((row) => row.lineUserId))], ['U001']);
+});
+
+test('normalizeDisplayNameList trims names, removes blanks, and deduplicates values', () => {
+  const names = normalizeDisplayNameList([' Beta ', '', 'Alpha', 'Beta', null, 42]);
+
+  assert.deepEqual(names, ['Beta', 'Alpha']);
 });
 
 test('groupDaily counts distinct line users by date and builds cumulative trend', () => {

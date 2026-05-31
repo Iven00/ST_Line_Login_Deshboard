@@ -140,6 +140,31 @@ export function filterRowsByExcludedDisplayNames(rows, excludedDisplayNames) {
   return rows.filter((row) => !excludedDisplayNames.has(row.displayName));
 }
 
+export function normalizeDisplayNameList(names) {
+  if (!Array.isArray(names)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const name of names) {
+    if (typeof name !== 'string') {
+      continue;
+    }
+
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
 export function groupDaily(rows) {
   const buckets = new Map();
 

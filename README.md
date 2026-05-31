@@ -52,7 +52,15 @@ window.DASHBOARD_CONFIG = {
 
 Dashboard 會從 Apps Script 回傳的 `displayName` 建立「濾除帳號」清單。勾選的帳號會從摘要卡片、每日圖表、每小時圖表中排除。設定會存在目前瀏覽器的 `localStorage`，下次開啟同一個 dashboard 會自動套用。
 
-更新 `apps-script/Code.gs` 後，請到 Apps Script 重新部署 Web App；若只改本機前端但沒有重新部署 Apps Script，API 不會回傳 `displayName`，畫面會把資料歸類為「未命名帳號」。
+目前濾除條件會同步存到同一份 Google Sheet 的 `工作表1` 頁籤，讓所有使用者共用。Apps Script 會在該頁籤追加或更新一列：
+
+| 欄位 A | 欄位 B | 欄位 C |
+| --- | --- | --- |
+| `__dashboard_excluded_display_names__` | JSON 格式的 displayName 陣列 | 更新時間 |
+
+這列不會有 `timestamp` 或 `lineUserId`，所以 dashboard 讀取登入資料時會自動忽略它。
+
+更新 `apps-script/Code.gs` 後，請到 Apps Script 重新部署 Web App；若只改本機前端但沒有重新部署 Apps Script，API 不會回傳 `displayName` 或共用濾除設定。
 
 ## GitHub Pages 部署
 

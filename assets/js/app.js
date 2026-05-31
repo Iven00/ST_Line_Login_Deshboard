@@ -4,10 +4,13 @@ import {
   getDisplayNameOptions,
   groupDaily,
   groupHourlyForDate,
+  normalizeDisplayNameList,
   normalizeRows
-} from './core.js?v=7';
+} from './core.js?v=9';
 
 const FILTER_STORAGE_KEY = 'stLineLoginDashboard.excludedDisplayNames.v1';
+const FILTER_HEIGHT_STORAGE_KEY = 'stLineLoginDashboard.filterListHeight.v1';
+let saveFiltersTimer = null;
 
 const sampleRows = [
   { timestamp: '2026-05-27T07:40:00+08:00', lineUserId: 'U001', displayName: '測試帳號 A' },
@@ -63,17 +66,42 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function loadSavedFilters() {
+function loadFallbackFilters() {
   try {
     const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '[]');
-    return new Set(Array.isArray(saved) ? saved.filter((name) => typeof name === 'string') : []);
+    return new Set(normalizeDisplayNameList(saved));
   } catch {
     return new Set();
   }
 }
 
-function saveFilters() {
-  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...state.excludedDisplayNames]));
+function persistFilters() {
+  const excludedDisplayNames = normalizeDisplayNameList([...state.excludedDisplayNames]);
+  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(excludedDisplayNames));
+
+  const apiUrl = buildApiUrl();
+  if (!apiUrl) {
+    return;
+  }
+
+  clearTimeout(saveFiltersTimer);
+  saveFiltersTimer = setTimeout(async () => {
+    try {
+      const saveUrl = new URL(apiUrl);
+      saveUrl.searchParams.set('action', 'saveFilters');
+      saveUrl.searchParams.set('excludedDisplayNames', JSON.stringify(excludedDisplayNames));
+      const response = await fetch(saveUrl.toString(), { cache: 'no-store' });
+      const payload = await response.json();
+
+      if (!response.ok || payload.status !== 'ok') {
+        throw new Error(payload.message || '濾除設定儲存失敗');
+      }
+
+      setStatus('資料已更新，濾除設定已同步', 'ok');
+    } catch (error) {
+      setStatus(`資料已更新，但濾除設定未同步：${error.message}`, 'error');
+    }
+  }, 350);
 }
 
 function buildApiUrl() {
@@ -88,12 +116,15 @@ function buildApiUrl() {
   return url.toString();
 }
 
-async function loadRows() {
+async function loadDashboardData() {
   const apiUrl = buildApiUrl();
 
   if (!apiUrl) {
     setStatus('目前使用展示資料。請在 assets/js/config.js 設定 Apps Script URL 與 token。');
-    return sampleRows;
+    return {
+      rows: sampleRows,
+      excludedDisplayNames: [...loadFallbackFilters()]
+    };
   }
 
   setStatus('正在讀取 Google Sheet 統計資料...');
@@ -104,7 +135,10 @@ async function loadRows() {
     throw new Error(payload.message || '資料讀取失敗');
   }
 
-  return payload.rows ?? [];
+  return {
+    rows: payload.rows ?? [],
+    excludedDisplayNames: normalizeDisplayNameList(payload.settings?.excludedDisplayNames ?? [])
+  };
 }
 
 function renderSummary(summary) {
@@ -130,7 +164,7 @@ function renderFilters() {
 
   const validNames = new Set(options.map((option) => option.name));
   state.excludedDisplayNames = new Set([...state.excludedDisplayNames].filter((name) => validNames.has(name)));
-  saveFilters();
+  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...state.excludedDisplayNames]));
 
   elements.filterSummary.textContent = state.excludedDisplayNames.size
     ? `已濾除 ${state.excludedDisplayNames.size} 個帳號`
@@ -158,7 +192,7 @@ function renderFilters() {
         state.excludedDisplayNames.delete(checkbox.value);
       }
 
-      saveFilters();
+      persistFilters();
       applyFiltersAndRender();
     });
   });
@@ -177,10 +211,10 @@ function setupFilterResize() {
   const resize = (event) => {
     const nextHeight = Math.min(420, Math.max(96, startHeight + event.clientY - startY));
     elements.filterList.style.maxHeight = `${nextHeight}px`;
-    localStorage.setItem('stLineLoginDashboard.filterListHeight.v1', String(nextHeight));
+    localStorage.setItem(FILTER_HEIGHT_STORAGE_KEY, String(nextHeight));
   };
 
-  const savedHeight = Number(localStorage.getItem('stLineLoginDashboard.filterListHeight.v1'));
+  const savedHeight = Number(localStorage.getItem(FILTER_HEIGHT_STORAGE_KEY));
   if (Number.isFinite(savedHeight) && savedHeight >= 96) {
     elements.filterList.style.maxHeight = `${Math.min(420, savedHeight)}px`;
   }
@@ -325,17 +359,17 @@ function applyFiltersAndRender() {
   renderCharts();
 }
 
-function renderDashboard(rows) {
+function renderDashboard(rows, excludedDisplayNames = []) {
   state.allRows = normalizeRows(rows);
-  state.excludedDisplayNames = loadSavedFilters();
+  state.excludedDisplayNames = new Set(normalizeDisplayNameList(excludedDisplayNames));
   state.selectedDate = '';
   applyFiltersAndRender();
 }
 
 async function init() {
   try {
-    const rows = await loadRows();
-    renderDashboard(rows);
+    const data = await loadDashboardData();
+    renderDashboard(data.rows, data.excludedDisplayNames);
     setStatus('資料已更新', 'ok');
   } catch (error) {
     setStatus(error.message, 'error');
@@ -345,13 +379,13 @@ async function init() {
 
 elements.selectAllFilters.addEventListener('click', () => {
   state.excludedDisplayNames = new Set(getDisplayNameOptions(state.allRows).map((option) => option.name));
-  saveFilters();
+  persistFilters();
   applyFiltersAndRender();
 });
 
 elements.clearFilters.addEventListener('click', () => {
   state.excludedDisplayNames = new Set();
-  saveFilters();
+  persistFilters();
   applyFiltersAndRender();
 });
 
