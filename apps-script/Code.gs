@@ -1,10 +1,20 @@
 const DEFAULT_TIME_ZONE = 'Asia/Taipei';
 const FILTER_SETTINGS_SHEET_NAME = '\u5de5\u4f5c\u88681';
 const FILTER_SETTINGS_KEY = '__dashboard_excluded_display_names__';
+const DEFAULT_CHILD_SPREADSHEET_ID = '10ZPabIQyhghv0PFqd-AJHu2y5GuXOCel286lGS-JqpI';
+const DEFAULT_EXPERIENCE_SPREADSHEET_ID = '1sPh4-H2HznHVvYJMj-03I6NUhyYkpyZOq0ZL7WTjmXY';
 const REQUIRED_COLUMNS = {
   timestamp: 'timestamp',
   lineUserId: 'lineUserId',
   displayName: 'displayName',
+};
+const CHILD_COLUMNS = {
+  timestamp: '\u6642\u9593\u6233\u8a18',
+  childId: '\u5b69\u7ae5\u8eab\u5206\u8b49\u5b57\u865f',
+};
+const EXPERIENCE_COLUMNS = {
+  timestamp: '\u6642\u9593\u6233\u8a18',
+  participantName: '\u53c3\u8207\u8005\u59d3\u540d',
 };
 
 function doGet(event) {
@@ -22,12 +32,16 @@ function doGet(event) {
     }
 
     const rows = readRows_();
+    const childRows = readChildRows_();
+    const experienceRows = readExperienceRows_();
     const settings = readFilterSettings_();
 
     return json_({
       status: 'ok',
       timeZone: DEFAULT_TIME_ZONE,
       rows,
+      childRows,
+      experienceRows,
       settings,
       generatedAt: Utilities.formatDate(new Date(), DEFAULT_TIME_ZONE, "yyyy-MM-dd'T'HH:mm:ss'+08:00'"),
     });
@@ -37,6 +51,78 @@ function doGet(event) {
       message: error.message || 'Unknown error',
     }, 400);
   }
+}
+
+function readExperienceRows_() {
+  const properties = PropertiesService.getScriptProperties();
+  const spreadsheetId = properties.getProperty('EXPERIENCE_SPREADSHEET_ID') || DEFAULT_EXPERIENCE_SPREADSHEET_ID;
+  const sheetName = properties.getProperty('EXPERIENCE_SHEET_NAME');
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = sheetName ? spreadsheet.getSheetByName(sheetName) : spreadsheet.getSheets()[0];
+
+  if (!sheet) {
+    throw new Error('Experience sheet not found.');
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return [];
+  }
+
+  const headers = values[0].map((value) => String(value).trim());
+  const columnIndexes = findExperienceColumnIndexes_(headers);
+
+  return values.slice(1)
+    .map((row) => {
+      const timestamp = row[columnIndexes.timestamp];
+      const participantName = String(row[columnIndexes.participantName] || '').trim();
+
+      if (!timestamp || !participantName) {
+        return null;
+      }
+
+      return {
+        timestamp: formatTimestamp_(timestamp),
+        participantName,
+      };
+    })
+    .filter(Boolean);
+}
+
+function readChildRows_() {
+  const properties = PropertiesService.getScriptProperties();
+  const spreadsheetId = properties.getProperty('CHILD_SPREADSHEET_ID') || DEFAULT_CHILD_SPREADSHEET_ID;
+  const sheetName = properties.getProperty('CHILD_SHEET_NAME');
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = sheetName ? spreadsheet.getSheetByName(sheetName) : spreadsheet.getSheets()[0];
+
+  if (!sheet) {
+    throw new Error('Child sheet not found.');
+  }
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return [];
+  }
+
+  const headers = values[0].map((value) => String(value).trim());
+  const columnIndexes = findChildColumnIndexes_(headers);
+
+  return values.slice(1)
+    .map((row) => {
+      const timestamp = row[columnIndexes.timestamp];
+      const childId = String(row[columnIndexes.childId] || '').trim();
+
+      if (!timestamp || !childId) {
+        return null;
+      }
+
+      return {
+        timestamp: formatTimestamp_(timestamp),
+        childId,
+      };
+    })
+    .filter(Boolean);
 }
 
 function doPost(event) {
@@ -226,6 +312,28 @@ function findColumnIndexes_(headers) {
   }
 
   return { timestamp, lineUserId, displayName };
+}
+
+function findChildColumnIndexes_(headers) {
+  const timestamp = headers.indexOf(CHILD_COLUMNS.timestamp);
+  const childId = headers.indexOf(CHILD_COLUMNS.childId);
+
+  if (timestamp === -1 || childId === -1) {
+    throw new Error('Required child columns 時間戳記 and 孩童身分證字號 were not found.');
+  }
+
+  return { timestamp, childId };
+}
+
+function findExperienceColumnIndexes_(headers) {
+  const timestamp = headers.indexOf(EXPERIENCE_COLUMNS.timestamp);
+  const participantName = headers.indexOf(EXPERIENCE_COLUMNS.participantName);
+
+  if (timestamp === -1 || participantName === -1) {
+    throw new Error('Required experience columns \u6642\u9593\u6233\u8a18 and \u53c3\u8207\u8005\u59d3\u540d were not found.');
+  }
+
+  return { timestamp, participantName };
 }
 
 function formatTimestamp_(value) {

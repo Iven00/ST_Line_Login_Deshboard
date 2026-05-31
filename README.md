@@ -26,6 +26,9 @@
 | `DASHBOARD_TOKEN` | 自訂一組長 token |
 | `SPREADSHEET_ID` | `1YKUInNATvHY1VNoFngw0NmROjkn1uSC-fX3iyOK0qgk` |
 | `SHEET_NAME` | 可選，若不填會讀第一個工作表 |
+| `CHILD_SPREADSHEET_ID` | 可選，預設 `10ZPabIQyhghv0PFqd-AJHu2y5GuXOCel286lGS-JqpI` |
+| `CHILD_SHEET_NAME` | 可選，第二份孩童資料的頁籤名稱；若不填會讀第一個工作表 |
+| `FILTER_SHEET_NAME` | 可選，預設 `工作表1`，用來存共用濾除設定 |
 
 4. 部署為 Web App：
    - Execute as：Me
@@ -61,6 +64,16 @@ Dashboard 會從 Apps Script 回傳的 `displayName` 建立「濾除帳號」清
 這列不會有 `timestamp` 或 `lineUserId`，所以 dashboard 讀取登入資料時會自動忽略它。
 
 更新 `apps-script/Code.gs` 後，請到 Apps Script 重新部署 Web App；若只改本機前端但沒有重新部署 Apps Script，API 不會回傳 `displayName` 或共用濾除設定。
+
+## 第二份孩童資料
+
+Dashboard 會額外讀取第二份 Google Sheet，並以黃色 bar 顯示：
+
+- 時間欄位：`時間戳記`
+- 去重欄位：`孩童身分證字號`
+- 預設 Spreadsheet ID：`10ZPabIQyhghv0PFqd-AJHu2y5GuXOCel286lGS-JqpI`
+
+每日圖與每小時圖都會顯示藍色 LINE bar 與黃色孩童資料 bar。綠色累計 trend 仍以 LINE Login 資料為準。
 
 ## GitHub Pages 部署
 

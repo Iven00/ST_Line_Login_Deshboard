@@ -35,6 +35,10 @@ function toLabel(dateKey) {
   return `${month}/${day}`;
 }
 
+function toShortHourLabel(hourKey) {
+  return hourKey.slice(0, 2);
+}
+
 function parseTimestamp(value) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
@@ -112,6 +116,41 @@ export function normalizeRows(rows) {
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
+function normalizeRegistrationRows(rows, idKeys) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row) => {
+      const timestamp = parseTimestamp(row?.timestamp ?? row?.['時間戳記']);
+      const lineUserId = String(idKeys.reduce((value, key) => value ?? row?.[key], null) ?? '').trim();
+
+      if (!timestamp || !lineUserId) {
+        return null;
+      }
+
+      return {
+        timestamp,
+        timestampText: timestamp.toISOString(),
+        lineUserId,
+        displayName: lineUserId,
+        dateKey: toDateKey(timestamp),
+        hourKey: toHourKey(timestamp)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export function normalizeChildRows(rows) {
+  return normalizeRegistrationRows(rows, ['childId', '孩童身分證字號']);
+}
+
+export function normalizeExperienceRows(rows) {
+  return normalizeRegistrationRows(rows, ['participantName', '參與者姓名']);
+}
+
 export function getDisplayNameOptions(rows) {
   const names = new Map();
 
@@ -179,7 +218,7 @@ export function groupDaily(rows) {
   return toSeries(buckets, toLabel);
 }
 
-export function groupHourlyForDate(rows, dateKey) {
+export function groupHourlyForDate(rows, dateKey, options = {}) {
   const buckets = new Map(createHourlyBuckets());
 
   for (const row of rows) {
@@ -194,7 +233,42 @@ export function groupHourlyForDate(rows, dateKey) {
     buckets.get(row.hourKey).add(row.lineUserId);
   }
 
-  return toSeries(buckets);
+  return toSeries(buckets, options.shortHourLabel ? toShortHourLabel : (key) => key);
+}
+
+export function combineSeries(primarySeries, secondarySeries = [], experienceSeries = []) {
+  const secondaryByKey = new Map(secondarySeries.map((item) => [item.key, item]));
+  const experienceByKey = new Map(experienceSeries.map((item) => [item.key, item]));
+  const primaryByKey = new Map(primarySeries.map((item) => [item.key, item]));
+  const keys = [...new Set([
+    ...primarySeries.map((item) => item.key),
+    ...secondarySeries.map((item) => item.key),
+    ...experienceSeries.map((item) => item.key)
+  ])]
+    .sort((a, b) => a.localeCompare(b));
+  let primaryCumulative = 0;
+  let secondaryCumulative = 0;
+  let experienceCumulative = 0;
+
+  return keys.map((key) => {
+    const primary = primaryByKey.get(key);
+    const secondary = secondaryByKey.get(key);
+    const experience = experienceByKey.get(key);
+    primaryCumulative += primary?.count ?? 0;
+    secondaryCumulative += secondary?.count ?? 0;
+    experienceCumulative += experience?.count ?? 0;
+
+    return {
+      key,
+      label: primary?.label ?? secondary?.label ?? experience?.label ?? key,
+      count: primary?.count ?? 0,
+      secondaryCount: secondary?.count ?? 0,
+      experienceCount: experience?.count ?? 0,
+      cumulative: primaryCumulative,
+      secondaryCumulative,
+      experienceCumulative
+    };
+  });
 }
 
 export function buildSummary(rows) {

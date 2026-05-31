@@ -4,19 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>山風童軍團 Line官方網站 Login 狀態儀錶板</title>
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/styles.css?v=21">
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
-            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
-              <path d="M9 32c4-8 8-12 12-12s8 4 12 12" stroke="#4285F4" stroke-width="4" stroke-linecap="round"/>
-              <path d="M20 29c3-7 6-11 9-11 2.5 0 5.5 3.2 9 9.5" stroke="#34A853" stroke-width="4" stroke-linecap="round"/>
-              <circle cx="17" cy="14" r="5" fill="#FBBC04"/>
-              <path d="M9 36h30" stroke="#EA4335" stroke-width="4" stroke-linecap="round"/>
-            </svg>
+            <img src="assets/img/troop-emblem.png?v=21" alt="">
           </div>
           <div>
             <h1>山風童軍團 Line官方網站 Login 狀態儀錶板</h1>
@@ -93,6 +88,17 @@
         </article>
       </section>
 
+      <section class="series-filter" aria-label="圖表資料過濾">
+        <label class="series-filter-option">
+          <input type="checkbox" data-hide-experience-series>
+          <span>濾除體驗活動報名數量</span>
+        </label>
+        <label class="series-filter-option">
+          <input type="checkbox" data-hide-secondary-series>
+          <span>濾除招生說明會報名數量</span>
+        </label>
+      </section>
+
       <section class="dashboard-grid">
         <article class="chart-card">
           <div class="chart-header">
@@ -104,8 +110,12 @@
           </div>
           <div class="chart-wrap" data-daily-chart></div>
           <div class="legend">
-            <span class="legend-item"><span class="legend-swatch"></span>單日數量</span>
-            <span class="legend-item"><span class="legend-swatch line"></span>累計 trend</span>
+            <span class="legend-item"><span class="legend-swatch"></span>LINE 好友數量</span>
+            <span class="legend-item" data-experience-legend><span class="legend-swatch experience"></span>體驗活動報名數量</span>
+            <span class="legend-item" data-secondary-legend><span class="legend-swatch secondary"></span>招生說明會報名數量</span>
+            <span class="legend-item"><span class="legend-swatch line"></span>好友累計</span>
+            <span class="legend-item" data-experience-legend><span class="legend-swatch experience-line"></span>體驗累計 trend</span>
+            <span class="legend-item" data-secondary-legend><span class="legend-swatch secondary-line"></span>招生累計 trend</span>
           </div>
         </article>
 
@@ -119,14 +129,18 @@
           </div>
           <div class="chart-wrap" data-hourly-chart></div>
           <div class="legend">
-            <span class="legend-item"><span class="legend-swatch"></span>小時數量</span>
-            <span class="legend-item"><span class="legend-swatch line"></span>當日累計 trend</span>
+            <span class="legend-item"><span class="legend-swatch"></span>LINE 好友數量</span>
+            <span class="legend-item" data-experience-legend><span class="legend-swatch experience"></span>體驗活動報名數量</span>
+            <span class="legend-item" data-secondary-legend><span class="legend-swatch secondary"></span>招生說明會報名數量</span>
+            <span class="legend-item"><span class="legend-swatch line"></span>好友當日累計</span>
+            <span class="legend-item" data-experience-legend><span class="legend-swatch experience-line"></span>體驗當日累計 trend</span>
+            <span class="legend-item" data-secondary-legend><span class="legend-swatch secondary-line"></span>招生當日累計 trend</span>
           </div>
         </article>
       </section>
     </main>
 
-    <script src="assets/js/config.js?v=9"></script>
-    <script type="module" src="assets/js/app.js?v=9"></script>
+    <script src="assets/js/config.js?v=21"></script>
+    <script type="module" src="assets/js/app.js?v=21"></script>
   </body>
 </html>

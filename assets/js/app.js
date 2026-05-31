@@ -1,12 +1,15 @@
 import {
   buildSummary,
+  combineSeries,
   filterRowsByExcludedDisplayNames,
   getDisplayNameOptions,
   groupDaily,
   groupHourlyForDate,
+  normalizeChildRows,
+  normalizeExperienceRows,
   normalizeDisplayNameList,
   normalizeRows
-} from './core.js?v=9';
+} from './core.js?v=20';
 
 const FILTER_STORAGE_KEY = 'stLineLoginDashboard.excludedDisplayNames.v1';
 const FILTER_HEIGHT_STORAGE_KEY = 'stLineLoginDashboard.filterListHeight.v1';
@@ -23,13 +26,30 @@ const sampleRows = [
   { timestamp: '2026-05-30T10:00:00+08:00', lineUserId: 'U005', displayName: '測試帳號 E' },
   { timestamp: '2026-05-31T15:18:00+08:00', lineUserId: 'U007', displayName: '' }
 ];
+const sampleChildRows = [
+  { timestamp: '2026-05-28T10:20:00+08:00', childId: 'A123' },
+  { timestamp: '2026-05-29T11:05:00+08:00', childId: 'B456' },
+  { timestamp: '2026-05-30T12:25:00+08:00', childId: 'C789' },
+  { timestamp: '2026-05-30T13:25:00+08:00', childId: 'D012' },
+  { timestamp: '2026-05-31T16:25:00+08:00', childId: 'E345' }
+];
+const sampleExperienceRows = [
+  { timestamp: '2026-05-28T10:40:00+08:00', participantName: '體驗 A' },
+  { timestamp: '2026-05-30T11:15:00+08:00', participantName: '體驗 B' },
+  { timestamp: '2026-05-30T17:20:00+08:00', participantName: '體驗 C' },
+  { timestamp: '2026-05-31T14:05:00+08:00', participantName: '體驗 D' }
+];
 
 const state = {
   allRows: [],
+  childRows: [],
+  experienceRows: [],
   rows: [],
   daily: [],
   selectedDate: '',
-  excludedDisplayNames: new Set()
+  excludedDisplayNames: new Set(),
+  hideExperienceSeries: false,
+  hideSecondarySeries: false
 };
 
 const elements = {
@@ -46,7 +66,11 @@ const elements = {
   filterResizeHandle: document.querySelector('[data-filter-resize-handle]'),
   filterSummary: document.querySelector('[data-filter-summary]'),
   selectAllFilters: document.querySelector('[data-select-all-filters]'),
-  clearFilters: document.querySelector('[data-clear-filters]')
+  clearFilters: document.querySelector('[data-clear-filters]'),
+  hideExperienceSeries: document.querySelector('[data-hide-experience-series]'),
+  hideSecondarySeries: document.querySelector('[data-hide-secondary-series]'),
+  experienceLegends: document.querySelectorAll('[data-experience-legend]'),
+  secondaryLegends: document.querySelectorAll('[data-secondary-legend]')
 };
 
 function setStatus(message, tone = 'neutral') {
@@ -123,6 +147,8 @@ async function loadDashboardData() {
     setStatus('目前使用展示資料。請在 assets/js/config.js 設定 Apps Script URL 與 token。');
     return {
       rows: sampleRows,
+      childRows: sampleChildRows,
+      experienceRows: sampleExperienceRows,
       excludedDisplayNames: [...loadFallbackFilters()]
     };
   }
@@ -137,6 +163,8 @@ async function loadDashboardData() {
 
   return {
     rows: payload.rows ?? [],
+    childRows: payload.childRows ?? [],
+    experienceRows: payload.experienceRows ?? [],
     excludedDisplayNames: normalizeDisplayNameList(payload.settings?.excludedDisplayNames ?? [])
   };
 }
@@ -246,12 +274,32 @@ function renderComboChart(container, data, options = {}) {
   const width = 920;
   const height = 330;
   const chart = { left: 58, top: 48, width: 800, height: 210 };
-  const maxValue = Math.max(1, ...data.map((item) => Math.max(item.count, item.cumulative)));
+  const showExperience = options.showExperience !== false;
+  const showSecondary = options.showSecondary !== false;
+  const maxValue = Math.max(1, ...data.map((item) => Math.max(
+    item.count,
+    showExperience ? item.experienceCount ?? 0 : 0,
+    showSecondary ? item.secondaryCount ?? 0 : 0,
+    item.cumulative,
+    showExperience ? item.experienceCumulative ?? 0 : 0,
+    showSecondary ? item.secondaryCumulative ?? 0 : 0
+  )));
   const barSlot = chart.width / data.length;
-  const barWidth = Math.min(42, barSlot * 0.46);
+  const hasSecondary = showSecondary && data.some((item) => Number(item.secondaryCount ?? 0) > 0);
+  const hasExperience = showExperience && data.some((item) => Number(item.experienceCount ?? 0) > 0);
+  const barCount = 1 + Number(hasExperience) + Number(hasSecondary);
+  const barWidth = barCount > 1 ? Math.min(20, barSlot * 0.2) : Math.min(42, barSlot * 0.46);
+  const barGap = barCount > 1 ? Math.min(7, barSlot * 0.06) : 0;
+  const barOffset = barWidth + barGap;
   const trendPoints = data
     .map((item, index) => pointFor(index, item.cumulative, data.length, maxValue, chart).join(','))
     .join(' ');
+  const experienceTrendPoints = hasExperience ? data
+    .map((item, index) => pointFor(index, item.experienceCumulative ?? 0, data.length, maxValue, chart).join(','))
+    .join(' ') : '';
+  const secondaryTrendPoints = hasSecondary ? data
+    .map((item, index) => pointFor(index, item.secondaryCumulative ?? 0, data.length, maxValue, chart).join(','))
+    .join(' ') : '';
 
   const axisLabels = [0, Math.ceil(maxValue / 2), maxValue]
     .map((value) => {
@@ -265,24 +313,79 @@ function renderComboChart(container, data, options = {}) {
 
   const bars = data
     .map((item, index) => {
-      const x = chart.left + barSlot * index + barSlot / 2 - barWidth / 2;
-      const barHeight = (item.count / maxValue) * chart.height;
-      const y = chart.top + chart.height - barHeight;
+      const centerX = chart.left + barSlot * index + barSlot / 2;
       const isSelected = item.key === options.selectedKey;
-      const labelY = barHeight < 20 ? y - 7 : y + Math.max(14, barHeight / 2 + 4);
-      const labelClass = barHeight < 20 ? 'bar-value is-outside' : 'bar-value';
-      const valueLabel = item.count > 0
-        ? `<text x="${x + barWidth / 2}" y="${labelY}" class="${labelClass}">${item.count}</text>`
-        : '';
+      const primaryX = barCount === 1 ? centerX - barWidth / 2 : centerX - (barOffset * (barCount - 1)) / 2 - barWidth / 2;
+      const experienceX = hasExperience ? primaryX + barOffset : centerX - barWidth / 2;
+      const secondaryX = hasSecondary ? primaryX + barOffset * (barCount - 1) : centerX - barWidth / 2;
+      const primaryBar = renderBar({
+        x: primaryX,
+        width: barWidth,
+        count: item.count,
+        maxValue,
+        chart
+      });
+      const experienceBar = hasExperience ? renderBar({
+        x: experienceX,
+        width: barWidth,
+        count: item.experienceCount ?? 0,
+        maxValue,
+        chart,
+        rectClass: 'experience-bar'
+      }) : '';
+      const secondaryBar = hasSecondary ? renderBar({
+        x: secondaryX,
+        width: barWidth,
+        count: item.secondaryCount ?? 0,
+        maxValue,
+        chart,
+        rectClass: 'secondary-bar'
+      }) : '';
 
       return `
         <g class="bar-group ${isSelected ? 'is-selected' : ''}" data-key="${item.key}" tabindex="0" role="button" aria-label="${item.label} ${item.count}">
-          <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(3, barHeight)}" rx="8" />
-          ${valueLabel}
-          <text x="${x + barWidth / 2}" y="${chart.top + chart.height + 28}" class="axis-label">${item.label}</text>
-          <title>${item.label}: ${item.count} / 累計 ${item.cumulative}</title>
+          ${primaryBar}
+          ${experienceBar}
+          ${secondaryBar}
+          <text x="${centerX}" y="${chart.top + chart.height + 28}" class="axis-label">${item.label}</text>
+          <title>${item.label}: LINE ${item.count} / 體驗 ${item.experienceCount ?? 0} / 招生 ${item.secondaryCount ?? 0} / 累計 ${item.cumulative}</title>
         </g>
       `;
+    })
+    .join('');
+
+  const barLabels = data
+    .map((item, index) => {
+      const centerX = chart.left + barSlot * index + barSlot / 2;
+      const primaryX = barCount === 1 ? centerX - barWidth / 2 : centerX - (barOffset * (barCount - 1)) / 2 - barWidth / 2;
+      const experienceX = hasExperience ? primaryX + barOffset : centerX - barWidth / 2;
+      const secondaryX = hasSecondary ? primaryX + barOffset * (barCount - 1) : centerX - barWidth / 2;
+      const primaryLabel = renderBarLabel({
+        x: primaryX,
+        width: barWidth,
+        count: item.count,
+        maxValue,
+        chart,
+        valueClass: 'bar-value primary'
+      });
+      const experienceLabel = hasExperience ? renderBarLabel({
+        x: experienceX,
+        width: barWidth,
+        count: item.experienceCount ?? 0,
+        maxValue,
+        chart,
+        valueClass: 'bar-value experience'
+      }) : '';
+      const secondaryLabel = hasSecondary ? renderBarLabel({
+        x: secondaryX,
+        width: barWidth,
+        count: item.secondaryCount ?? 0,
+        maxValue,
+        chart,
+        valueClass: 'bar-value secondary'
+      }) : '';
+
+      return `${primaryLabel}${experienceLabel}${secondaryLabel}`;
     })
     .join('');
 
@@ -294,23 +397,71 @@ function renderComboChart(container, data, options = {}) {
       const labelX = isLast ? x - 10 : isFirst ? x + 10 : x;
       const labelAnchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
       const labelY = Math.max(16, y - 18);
+      const valueLabel = item.cumulative > 0
+        ? `<text x="${labelX}" y="${labelY}" class="trend-value" text-anchor="${labelAnchor}">${item.cumulative}</text>`
+        : '';
       return `
         <g class="trend-point">
-          <text x="${labelX}" y="${labelY}" class="trend-value" text-anchor="${labelAnchor}">${item.cumulative}</text>
+          ${valueLabel}
           <circle cx="${x}" cy="${y}" r="5" class="trend-dot"><title>累計 ${item.cumulative}</title></circle>
         </g>
       `;
     })
     .join('');
+  const experiencePoints = hasExperience ? data
+    .map((item, index) => {
+      const [x, y] = pointFor(index, item.experienceCumulative ?? 0, data.length, maxValue, chart);
+      const isLast = index === data.length - 1;
+      const isFirst = index === 0;
+      const labelX = isLast ? x - 10 : isFirst ? x + 10 : x;
+      const labelAnchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
+      const labelY = Math.max(24, y - 14);
+      const cumulative = item.experienceCumulative ?? 0;
+      const valueLabel = cumulative > 0
+        ? `<text x="${labelX}" y="${labelY}" class="experience-trend-value" text-anchor="${labelAnchor}">${cumulative}</text>`
+        : '';
+      return `
+        <g class="experience-trend-point">
+          ${valueLabel}
+          <circle cx="${x}" cy="${y}" r="4" class="experience-trend-dot"><title>體驗累計 ${cumulative}</title></circle>
+        </g>
+      `;
+    })
+    .join('') : '';
+  const secondaryPoints = hasSecondary ? data
+    .map((item, index) => {
+      const [x, y] = pointFor(index, item.secondaryCumulative ?? 0, data.length, maxValue, chart);
+      const isLast = index === data.length - 1;
+      const isFirst = index === 0;
+      const labelX = isLast ? x - 10 : isFirst ? x + 10 : x;
+      const labelAnchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
+      const labelY = Math.max(30, y - 10);
+      const cumulative = item.secondaryCumulative ?? 0;
+      const valueLabel = cumulative > 0
+        ? `<text x="${labelX}" y="${labelY}" class="secondary-trend-value" text-anchor="${labelAnchor}">${cumulative}</text>`
+        : '';
+      return `
+        <g class="secondary-trend-point">
+          ${valueLabel}
+          <circle cx="${x}" cy="${y}" r="4" class="secondary-trend-dot"><title>招生累計 ${cumulative}</title></circle>
+        </g>
+      `;
+    })
+    .join('') : '';
 
   container.innerHTML = `
     <svg class="combo-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${options.title}">
       <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
       ${axisLabels}
       <line x1="${chart.left}" y1="${chart.top + chart.height}" x2="${chart.left + chart.width}" y2="${chart.top + chart.height}" class="axis-line" />
-      ${bars}
+      ${hasSecondary ? `<polyline points="${secondaryTrendPoints}" class="secondary-trend-line" />` : ''}
+      ${hasExperience ? `<polyline points="${experienceTrendPoints}" class="experience-trend-line" />` : ''}
       <polyline points="${trendPoints}" class="trend-line" />
+      ${secondaryPoints}
+      ${experiencePoints}
       ${points}
+      ${bars}
+      ${barLabels}
     </svg>
   `;
 
@@ -328,13 +479,39 @@ function renderComboChart(container, data, options = {}) {
   }
 }
 
+function renderBar({ x, width, count, maxValue, chart, rectClass = '' }) {
+  const barHeight = (count / maxValue) * chart.height;
+  const y = chart.top + chart.height - barHeight;
+
+  return `<rect class="${rectClass}" x="${x}" y="${y}" width="${width}" height="${Math.max(3, barHeight)}" rx="8" />`;
+}
+
+function renderBarLabel({ x, width, count, maxValue, chart, valueClass }) {
+  if (count <= 0) {
+    return '';
+  }
+
+  const barHeight = (count / maxValue) * chart.height;
+  const y = chart.top + chart.height - barHeight;
+  const labelY = barHeight < 20 ? y - 7 : y + Math.max(14, barHeight / 2 + 4);
+  const labelClass = barHeight < 20 ? `${valueClass} is-outside` : valueClass;
+
+  return `<text x="${x + width / 2}" y="${labelY}" class="${labelClass}">${count}</text>`;
+}
+
 function renderCharts() {
-  const hourly = groupHourlyForDate(state.rows, state.selectedDate);
+  const lineHourly = groupHourlyForDate(state.rows, state.selectedDate, { shortHourLabel: true });
+  const childHourly = groupHourlyForDate(state.childRows, state.selectedDate, { shortHourLabel: true });
+  const experienceHourly = groupHourlyForDate(state.experienceRows, state.selectedDate, { shortHourLabel: true });
+  const hourly = combineSeries(lineHourly, childHourly, experienceHourly);
   elements.selectedDate.textContent = state.selectedDate || '-';
+  updateSeriesFilterUi();
 
   renderComboChart(elements.dailyChart, state.daily, {
     title: '每日登入數與累計趨勢',
     selectedKey: state.selectedDate,
+    showExperience: !state.hideExperienceSeries,
+    showSecondary: !state.hideSecondarySeries,
     onSelect: (dateKey) => {
       state.selectedDate = dateKey;
       renderCharts();
@@ -342,13 +519,32 @@ function renderCharts() {
   });
 
   renderComboChart(elements.hourlyChart, hourly, {
-    title: `${state.selectedDate} 每小時登入數與累計趨勢`
+    title: `${state.selectedDate} 每小時登入數與累計趨勢`,
+    showExperience: !state.hideExperienceSeries,
+    showSecondary: !state.hideSecondarySeries
+  });
+}
+
+function updateSeriesFilterUi() {
+  if (elements.hideExperienceSeries) {
+    elements.hideExperienceSeries.checked = state.hideExperienceSeries;
+  }
+
+  if (elements.hideSecondarySeries) {
+    elements.hideSecondarySeries.checked = state.hideSecondarySeries;
+  }
+
+  elements.experienceLegends.forEach((legend) => {
+    legend.classList.toggle('is-hidden', state.hideExperienceSeries);
+  });
+  elements.secondaryLegends.forEach((legend) => {
+    legend.classList.toggle('is-hidden', state.hideSecondarySeries);
   });
 }
 
 function applyFiltersAndRender() {
   state.rows = filterRowsByExcludedDisplayNames(state.allRows, state.excludedDisplayNames);
-  state.daily = groupDaily(state.rows);
+  state.daily = combineSeries(groupDaily(state.rows), groupDaily(state.childRows), groupDaily(state.experienceRows));
 
   if (!state.daily.some((item) => item.key === state.selectedDate)) {
     state.selectedDate = state.daily.at(-1)?.key ?? '';
@@ -359,8 +555,10 @@ function applyFiltersAndRender() {
   renderCharts();
 }
 
-function renderDashboard(rows, excludedDisplayNames = []) {
+function renderDashboard(rows, childRows = [], experienceRows = [], excludedDisplayNames = []) {
   state.allRows = normalizeRows(rows);
+  state.childRows = normalizeChildRows(childRows);
+  state.experienceRows = normalizeExperienceRows(experienceRows);
   state.excludedDisplayNames = new Set(normalizeDisplayNameList(excludedDisplayNames));
   state.selectedDate = '';
   applyFiltersAndRender();
@@ -369,7 +567,7 @@ function renderDashboard(rows, excludedDisplayNames = []) {
 async function init() {
   try {
     const data = await loadDashboardData();
-    renderDashboard(data.rows, data.excludedDisplayNames);
+    renderDashboard(data.rows, data.childRows, data.experienceRows, data.excludedDisplayNames);
     setStatus('資料已更新', 'ok');
   } catch (error) {
     setStatus(error.message, 'error');
@@ -387,6 +585,16 @@ elements.clearFilters.addEventListener('click', () => {
   state.excludedDisplayNames = new Set();
   persistFilters();
   applyFiltersAndRender();
+});
+
+elements.hideExperienceSeries?.addEventListener('change', () => {
+  state.hideExperienceSeries = elements.hideExperienceSeries.checked;
+  renderCharts();
+});
+
+elements.hideSecondarySeries?.addEventListener('change', () => {
+  state.hideSecondarySeries = elements.hideSecondarySeries.checked;
+  renderCharts();
 });
 
 setupFilterResize();
