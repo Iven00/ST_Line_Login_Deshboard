@@ -50,8 +50,8 @@ body {
 
 .brand-mark {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 50%;
@@ -62,8 +62,8 @@ body {
 
 .brand-mark img {
   display: block;
-  width: 50px;
-  height: 50px;
+  width: 64px;
+  height: 64px;
   object-fit: contain;
 }
 
@@ -110,9 +110,44 @@ body {
 
 .series-filter {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.series-totals,
+.series-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.series-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 32px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(221, 231, 243, 0.78);
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(66, 133, 244, 0.06);
+}
+
+.series-total strong {
+  font-size: 16px;
+}
+
+.series-total.is-experience {
+  color: var(--goose-yellow-strong);
+}
+
+.series-total.is-secondary {
+  color: var(--green);
 }
 
 .series-filter-option {
@@ -604,6 +639,7 @@ body {
 
   .series-filter {
     justify-content: flex-start;
+    align-items: flex-start;
     flex-wrap: wrap;
   }
 
@@ -627,13 +663,13 @@ body {
   }
 
   .brand-mark {
-    width: 48px;
-    height: 48px;
+    width: 58px;
+    height: 58px;
   }
 
   .brand-mark img {
-    width: 42px;
-    height: 42px;
+    width: 52px;
+    height: 52px;
   }
 
   .summary-grid {
@@ -641,6 +677,12 @@ body {
   }
 
   .series-filter {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .series-totals,
+  .series-filter-controls {
     display: grid;
     grid-template-columns: 1fr;
   }

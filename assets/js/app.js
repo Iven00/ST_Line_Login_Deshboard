@@ -9,7 +9,7 @@ import {
   normalizeExperienceRows,
   normalizeDisplayNameList,
   normalizeRows
-} from './core.js?v=20';
+} from './core.js?v=22';
 
 const FILTER_STORAGE_KEY = 'stLineLoginDashboard.excludedDisplayNames.v1';
 const FILTER_HEIGHT_STORAGE_KEY = 'stLineLoginDashboard.filterListHeight.v1';
@@ -69,6 +69,8 @@ const elements = {
   clearFilters: document.querySelector('[data-clear-filters]'),
   hideExperienceSeries: document.querySelector('[data-hide-experience-series]'),
   hideSecondarySeries: document.querySelector('[data-hide-secondary-series]'),
+  experienceTotal: document.querySelector('[data-experience-total]'),
+  secondaryTotal: document.querySelector('[data-secondary-total]'),
   experienceLegends: document.querySelectorAll('[data-experience-legend]'),
   secondaryLegends: document.querySelectorAll('[data-secondary-legend]')
 };
@@ -506,6 +508,7 @@ function renderCharts() {
   const hourly = combineSeries(lineHourly, childHourly, experienceHourly);
   elements.selectedDate.textContent = state.selectedDate || '-';
   updateSeriesFilterUi();
+  renderRegistrationTotals();
 
   renderComboChart(elements.dailyChart, state.daily, {
     title: '每日登入數與累計趨勢',
@@ -523,6 +526,18 @@ function renderCharts() {
     showExperience: !state.hideExperienceSeries,
     showSecondary: !state.hideSecondarySeries
   });
+}
+
+function renderRegistrationTotals() {
+  const latest = state.daily.at(-1);
+
+  if (elements.experienceTotal) {
+    elements.experienceTotal.textContent = numberText(latest?.experienceCumulative ?? 0);
+  }
+
+  if (elements.secondaryTotal) {
+    elements.secondaryTotal.textContent = numberText(latest?.secondaryCumulative ?? 0);
+  }
 }
 
 function updateSeriesFilterUi() {
